@@ -1,0 +1,143 @@
+# Step 0a: Scrape comments from Reddit
+import praw
+import math
+
+# authenticate to Reddit API
+reddit = praw.Reddit(client_id='EskwcO6JSqqeGHCFgdhSuw',
+                     client_secret='hlP3FHqbqnmGj0kasYj7l71kQwfyNQ',
+                     user_agent='final')
+
+# specify the subreddit and thread ID
+subreddit = reddit.subreddit('spotify')
+thread_id = 'wc7sjj'
+
+# get the submission object for the thread
+submission = reddit.submission(id=thread_id)
+
+# define a recursive function to print out comment tree with indentation
+def print_comment_tree(comment, indent=0, file=None):
+    print('  ' * indent + comment.body, file=file)
+    for reply in comment.replies:
+        print_comment_tree(reply, indent+1, file=file)
+
+# flatten comment tree and sort by score (highest first)
+submission.comment_sort = 'top'
+submission.comments.replace_more(limit=None)
+comments = submission.comments.list()
+comments = sorted(comments, key=lambda x: x.score, reverse=True)
+
+# print out the comment tree to files
+chunk_size = 40
+num_files = math.ceil(len(comments) / chunk_size)
+for i in range(num_files):
+    start_idx = i * chunk_size
+    end_idx = (i+1) * chunk_size
+    chunk_comments = comments[start_idx:end_idx]
+    with open(f'output_{i+1}.txt', 'w') as f:
+        for j, comment in enumerate(chunk_comments):
+            print(f'Comment {j+start_idx+1}:', file=f)
+            print_comment_tree(comment, file=f)
+            print('\n', file=f)
+
+# Step 0b: Scrape comments from the Spotify Community 
+import requests
+from bs4 import BeautifulSoup
+
+# Define the base URL and number of pages to scrape
+base_url = 'https://community.spotify.com/t5/App-Features/New-Home-Feed-Interface/td-p/5521360/page/'
+num_pages = 117
+
+# Loop through each page and scrape the comments
+for i in range(1, num_pages+1):
+    # Send a GET request to the URL
+    url = base_url + str(i)
+    response = requests.get(url)
+
+    # Parse the HTML content using BeautifulSoup
+    soup = BeautifulSoup(response.content, 'html.parser')
+
+    # Find the HTML elements that contain the comments
+    comments = soup.find_all('div', class_='lia-message-body-content')
+
+    # Save the comments to a text file for this page
+    with open(f'comments_page{i}.txt', 'w') as f:
+        for comment in comments:
+            f.write(comment.get_text() + '\n')
+    
+    # Print a message indicating that the comments for this page have been saved
+    print(f'Saved comments for page {i}')
+
+# Step 1: Remove duplicates from the Reddit data: 
+# read the file
+data <- readLines("input.txt")
+
+# remove duplicates
+unique_data <- unique(data)
+
+# write the new data to a new file
+writeLines(clean_data, "output.txt")
+
+# Step 2: Remove comments containing [deleted] and [removed] from the Reddit data: 
+# read the file
+data <- readLines("input.txt")
+
+# remove "[deleted]" and "[removed]"
+clean_data <- gsub("\\[deleted\\]|\\[removed\\]", "", unique_data)
+
+# write the new data to a new file
+writeLines(clean_data, "output.txt")
+
+# Step 3: Remove URLs for both datasets: 
+# Read the text file
+text <- readLines("input.txt")
+
+# Define a regular expression pattern to match URLs
+url_pattern <- "http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+"
+
+# Remove URLs from the text
+clean_text <- gsub(url_pattern, "", text)
+
+# Write the cleaned text to a new file
+writeLines(clean_text, "output.txt")
+
+# Step 4: Filter out irrelevant comments according to keywords for the Reddit data
+# Read in the input file
+input_file <- readLines("input.txt")
+
+# Define the keywords to search for
+keywords <- c("Home page", "homepage", "discovery", "discover weekly", "shuffle", 
+              "podcast", "interface", "layout", "heart button", "heart", "like button", 
+              "playlist button", "like song", "liked songs", "search bar", "Tiktok", 
+              "tik-tok", "UI", "UX", "ui", "design", "update", "feature")
+
+# Define a function to check if a unit contains any of the keywords
+check_keywords <- function(unit) {
+  any(sapply(keywords, grepl, unit, ignore.case = TRUE))
+}
+
+# Initialize an empty vector to hold the filtered units
+filtered_units <- c()
+
+# Initialize an empty vector to hold the current unit's lines
+current_unit_lines <- c()
+
+# Iterate through each line in the input file and filter out units that don't contain keywords
+for (line in input_file) {
+  if (grepl("^Comment \\d+:$", line)) {  # Start of a new unit
+    if (check_keywords(paste(current_unit_lines, collapse = "\n"))) {  # If the previous unit contains keywords, add it to the output
+      filtered_units <- c(filtered_units, current_unit_lines)
+    }
+    current_unit_lines <- c(line)
+  } else {
+    current_unit_lines <- c(current_unit_lines, line)
+  }
+}
+
+# Add the last unit to the output if it contains keywords
+if (check_keywords(paste(current_unit_lines, collapse = "\n"))) {
+  filtered_units <- c(filtered_units, current_unit_lines)
+}
+
+# Write the filtered units to a new file
+writeLines(filtered_units, "output.txt")
+
